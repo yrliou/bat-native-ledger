@@ -31,10 +31,6 @@ class BatClient {
       const std::map<std::string, std::string>& headers);
   void registerPersonaCallback(bool result, const std::string& response,
       const std::map<std::string, std::string>& headers);
-  braveledger_bat_helper::CURRENT_RECONCILE GetReconcileById(const std::string& viewingId);
-  bool SetReconcile(const braveledger_bat_helper::CURRENT_RECONCILE& reconcile);
-  unsigned int getBallotsCount(const std::string& viewingId);
-  void prepareBallots();
   std::string getWalletPassphrase() const;
   void walletPropertiesCallback(bool success, const std::string& response,
       const std::map<std::string, std::string>& headers);
@@ -63,15 +59,6 @@ class BatClient {
       const std::map<std::string, std::string>& headers);
   void recoverWalletCallback(bool result, const std::string& response,
       const std::map<std::string, std::string>& headers, const std::string& paymentId);
-  void prepareBatch(const braveledger_bat_helper::BALLOT_ST& ballot, const braveledger_bat_helper::TRANSACTION_ST& transaction);
-  void prepareBatchCallback(bool result, const std::string& response,
-      const std::map<std::string, std::string>& headers);
-  void proofBatch(
-      const std::vector<braveledger_bat_helper::BATCH_PROOF>& batchProof,
-      ledger::LedgerTaskRunner::CallerThreadCallback callback);
-  void proofBatchCallback(
-      const std::vector<braveledger_bat_helper::BATCH_PROOF>& batchProof,
-      const std::vector<std::string>& proofs);
   void voteBatchCallback(const std::string& publisher, bool result, const std::string& response,
       const std::map<std::string, std::string>& headers);
   void vote(const std::string& publisher, const std::string& viewingId);

@@ -11,6 +11,12 @@
 #include "bat_helper.h"
 #include "url_request_handler.h"
 
+
+// TODO checklist
+// - check if some public can be moved into private
+// - do clang tidy improvements
+// - rename variables from CamelCase
+
 namespace bat_ledger {
   class LedgerImpl;
 }
@@ -97,12 +103,6 @@ class BatContribution {
                           const std::string& viewing_id,
                           const braveledger_bat_helper::PublisherList& list);
 
-  void VotePublishers(const braveledger_bat_helper::Winners& winners,
-                      const std::string& viewing_id);
-
-  void VotePublisher(const std::string& publisher,
-                     const std::string& viewingId);
-
   // Does final stage in contribution
   // Sets reports and contribution info
   void OnReconcileCompleteSuccess(const std::string& viewing_id,
@@ -116,6 +116,31 @@ class BatContribution {
   std::string GetAnonizeProof(const std::string& registrar_VK,
                               const std::string& id,
                               std::string& pre_flight);
+
+  void VotePublishers(const braveledger_bat_helper::Winners& winners,
+                      const std::string& viewing_id);
+
+  void VotePublisher(const std::string& publisher,
+                     const std::string& viewingId);
+
+  void PrepareBallots();
+
+  void PrepareBatch(
+      const braveledger_bat_helper::BALLOT_ST& ballot,
+      const braveledger_bat_helper::TRANSACTION_ST& transaction);
+
+  void PrepareBatchCallback(
+      bool result,
+      const std::string& response,
+      const std::map<std::string, std::string>& headers);
+
+  void ProofBatch(
+      const braveledger_bat_helper::BathProofs& batchProof,
+      ledger::LedgerTaskRunner::CallerThreadCallback callback);
+
+  void ProofBatchCallback(
+      const braveledger_bat_helper::BathProofs& batchProof,
+      const std::vector<std::string>& proofs);
 
   bat_ledger::LedgerImpl* ledger_;  // NOT OWNED
 

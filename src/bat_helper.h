@@ -374,6 +374,8 @@ namespace braveledger_bat_helper {
     BALLOT_ST ballot_;
   };
 
+  typedef std::vector<braveledger_bat_helper::BATCH_PROOF> BathProofs;
+
   enum class SERVER_TYPES {
     LEDGER,
     BALANCE,
