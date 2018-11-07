@@ -33,6 +33,10 @@ namespace braveledger_bat_state {
 class BatState;
 }
 
+namespace braveledger_bat_contribution {
+class BatContribution;
+}
+
 namespace bat_ledger {
 
 class LedgerImpl : public ledger::Ledger,
@@ -62,10 +66,10 @@ class LedgerImpl : public ledger::Ledger,
   std::vector<ledger::ContributionInfo> GetRecurringDonationPublisherInfo() override;
   void GetPublisherInfoList(uint32_t start, uint32_t limit,
                             const ledger::PublisherInfoFilter& filter,
-                            ledger::GetPublisherInfoListCallback callback) override;
+                            ledger::PublisherInfoListCallback callback) override;
   void GetCurrentPublisherInfoList(uint32_t start, uint32_t limit,
                             const ledger::PublisherInfoFilter& filter,
-                            ledger::GetPublisherInfoListCallback callback) override;
+                            ledger::PublisherInfoListCallback callback) override;
 
   void DoDirectDonation(const ledger::PublisherInfo& publisher, const int amount, const std::string& currency) override;
 
@@ -186,9 +190,8 @@ class LedgerImpl : public ledger::Ledger,
                                   const ledger::PUBLISHER_MONTH month,
                                   const int year,
                                   const uint32_t date) override;
-  void GetRecurringDonations(ledger::RecurringDonationCallback callback);
+  void GetRecurringDonations(ledger::PublisherInfoListCallback callback);
   void RemoveRecurring(const std::string& publisher_key) override;
-  void StartAutoContribute();
   ledger::PublisherInfoFilter CreatePublisherFilter(const std::string& publisher_id,
       ledger::PUBLISHER_CATEGORY category,
       ledger::PUBLISHER_MONTH month,
@@ -259,6 +262,13 @@ class LedgerImpl : public ledger::Ledger,
 
   bool ReconcileExists(const std::string& viewingId);
 
+  void SaveContributionInfo(const std::string& probi,
+                            const int month,
+                            const int year,
+                            const uint32_t date,
+                            const std::string& publisher_key,
+                            const ledger::PUBLISHER_CATEGORY category);
+
  private:
   void MakePayment(const ledger::PaymentData& payment_data) override;
   void AddRecurringPayment(const std::string& publisher_id, const double& value) override;
@@ -283,10 +293,6 @@ class LedgerImpl : public ledger::Ledger,
       const std::string& referrer,
       const std::string& post_data,
       const ledger::VisitData& visit_data) override;
-
-  void ReconcileContributeList(const ledger::PUBLISHER_CATEGORY category,
-                               const ledger::PublisherInfoList& list,
-                               uint32_t  next_record);
 
   void ReconcileRecurringList(const ledger::PUBLISHER_CATEGORY category,
                               const ledger::PublisherInfoList& list);
@@ -320,6 +326,7 @@ class LedgerImpl : public ledger::Ledger,
   std::unique_ptr<braveledger_bat_publishers::BatPublishers> bat_publishers_;
   std::unique_ptr<braveledger_bat_get_media::BatGetMedia> bat_get_media_;
   std::unique_ptr<braveledger_bat_state::BatState> bat_state_;
+  std::unique_ptr<braveledger_bat_contribution::BatContribution> bat_contribution_;
   bool initialized_;
   bool initializing_;
 

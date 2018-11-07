@@ -271,6 +271,9 @@ namespace braveledger_bat_helper {
     std::string currency_;
   };
 
+  typedef std::vector<RECONCILE_DIRECTION> Directions;
+  typedef std::vector<PUBLISHER_ST> PublisherList;
+
   struct CURRENT_RECONCILE {
     CURRENT_RECONCILE();
     CURRENT_RECONCILE(const CURRENT_RECONCILE&);
@@ -290,14 +293,15 @@ namespace braveledger_bat_helper {
     std::string amount_;
     std::string currency_;
     double fee_;
-    std::vector<RECONCILE_DIRECTION> directions_;
+    Directions directions_;
     int category_;
-    std::vector<PUBLISHER_ST> list_;
+    PublisherList list_;
   };
 
   typedef std::vector<TRANSACTION_ST> Transactions;
   typedef std::vector<BALLOT_ST> Ballots;
   typedef std::vector<BATCH_VOTES_ST> BatchVotes;
+  typedef std::map<std::string, CURRENT_RECONCILE> CurrentReconciles;
 
   struct CLIENT_STATE_ST {
     CLIENT_STATE_ST();
@@ -328,7 +332,7 @@ namespace braveledger_bat_helper {
     std::string rulesetV2_;
     BatchVotes batch_;
     GRANT grant_;
-    std::map<std::string, CURRENT_RECONCILE> current_reconciles_;
+    CurrentReconciles current_reconciles_;
     bool auto_contribute_ = false;
     bool rewards_enabled_ = false;
   };

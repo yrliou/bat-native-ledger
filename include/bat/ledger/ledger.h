@@ -127,10 +127,10 @@ class LEDGER_EXPORT Ledger {
   virtual std::vector<ContributionInfo> GetRecurringDonationPublisherInfo() = 0;
   virtual void GetPublisherInfoList(uint32_t start, uint32_t limit,
                                     const ledger::PublisherInfoFilter& filter,
-                                    GetPublisherInfoListCallback callback) = 0;
+                                    PublisherInfoListCallback callback) = 0;
   virtual void GetCurrentPublisherInfoList(uint32_t start, uint32_t limit,
                             const ledger::PublisherInfoFilter& filter,
-                            ledger::GetPublisherInfoListCallback callback) = 0;
+                            ledger::PublisherInfoListCallback callback) = 0;
 
   virtual void SetRewardsMainEnabled(bool enabled) = 0;
   virtual void SetPublisherMinVisitTime(uint64_t duration_in_seconds) = 0;
