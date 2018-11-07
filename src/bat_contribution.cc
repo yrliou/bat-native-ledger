@@ -4,12 +4,19 @@
 
 #include <vector>
 #include <map>
+#include <cmath>
 
 #include "bat_contribution.h"
 #include "ledger_impl.h"
 #include "anon/anon.h"
 
 namespace braveledger_bat_contribution {
+
+static bool winners_votes_compare(
+    const braveledger_bat_helper::WINNERS_ST& first,
+    const braveledger_bat_helper::WINNERS_ST& second){
+  return (first.votes_ < second.votes_);
+}
 
 BatContribution::BatContribution(bat_ledger::LedgerImpl* ledger) :
     ledger_(ledger) {
@@ -49,7 +56,7 @@ void BatContribution::ReconcilePublisherList(
     ledger::PUBLISHER_CATEGORY category,
     const ledger::PublisherInfoList& list,
     uint32_t next_record) {
-  std::vector<braveledger_bat_helper::PUBLISHER_ST> newList;
+  braveledger_bat_helper::PublisherList newList;
   for (const auto &publisher : list) {
     braveledger_bat_helper::PUBLISHER_ST new_publisher;
     new_publisher.id_ = publisher.id;
@@ -294,7 +301,7 @@ void BatContribution::CurrentReconcileCallback(
   ledger_->LogResponse(__func__, result, response, headers);
 
   if (!result) {
-    ledger_->OnReconcileComplete(ledger::Result::LEDGER_ERROR, viewingId);
+    OnReconcileComplete(ledger::Result::LEDGER_ERROR, viewingId);
     // TODO(nejczdovc) errors handling
     return;
   }
@@ -308,7 +315,7 @@ void BatContribution::CurrentReconcileCallback(
   if (unsignedTx.amount_.empty() &&
       unsignedTx.currency_.empty() &&
       unsignedTx.destination_.empty()) {
-    ledger_->OnReconcileComplete(
+    OnReconcileComplete(
         ledger::Result::LEDGER_ERROR, reconcile.viewingId_);
     // We don't have any unsigned transactions
     // TODO(nejczdovc) error handling
@@ -385,7 +392,7 @@ void BatContribution::ReconcilePayloadCallback(
   ledger_->LogResponse(__func__, result, response, headers);
 
   if (!result) {
-    ledger_->OnReconcileComplete(ledger::Result::LEDGER_ERROR, viewingId);
+    OnReconcileComplete(ledger::Result::LEDGER_ERROR, viewingId);
     // TODO(nejczdovc) errors handling
     return;
   }
@@ -409,18 +416,20 @@ void BatContribution::ReconcilePayloadCallback(
 
 void BatContribution::RegisterViewing(const std::string& viewingId) {
   auto request_id = ledger_->LoadURL(
-      braveledger_bat_helper::buildURL((std::string)REGISTER_VIEWING, PREFIX_V2),
+      braveledger_bat_helper::buildURL(
+          (std::string)REGISTER_VIEWING, PREFIX_V2),
       std::vector<std::string>(),
       "",
       "",
       ledger::URL_METHOD::GET, &handler_);
   handler_.AddRequestHandler(std::move(request_id),
-                             std::bind(&BatContribution::RegisterViewingCallback,
-                                       this,
-                                       viewingId,
-                                       std::placeholders::_1,
-                                       std::placeholders::_2,
-                                       std::placeholders::_3));
+                             std::bind(
+                                 &BatContribution::RegisterViewingCallback,
+                                 this,
+                                 viewingId,
+                                 std::placeholders::_1,
+                                 std::placeholders::_2,
+                                 std::placeholders::_3));
 }
 
 void BatContribution::RegisterViewingCallback(
@@ -431,7 +440,7 @@ void BatContribution::RegisterViewingCallback(
   ledger_->LogResponse(__func__, result, response, headers);
 
   if (!result) {
-    ledger_->OnReconcileComplete(ledger::Result::LEDGER_ERROR, viewingId);
+    OnReconcileComplete(ledger::Result::LEDGER_ERROR, viewingId);
     // TODO(nejczdovc) errors handling
     return;
   }
@@ -500,7 +509,7 @@ void BatContribution::ViewingCredentialsCallback(
   ledger_->LogResponse(__func__, result, response, headers);
 
   if (!result) {
-    ledger_->OnReconcileComplete(ledger::Result::LEDGER_ERROR, viewingId);
+    OnReconcileComplete(ledger::Result::LEDGER_ERROR, viewingId);
     // TODO(nejczdovc) errors handling
     return;
   }
@@ -548,9 +557,37 @@ void BatContribution::ViewingCredentialsCallback(
   }
 
   ledger_->SetTransactions(transactions);
-  ledger_->OnReconcileComplete(ledger::Result::LEDGER_OK,
+  OnReconcileComplete(ledger::Result::LEDGER_OK,
                                reconcile.viewingId_,
                                probi);
+}
+
+void BatContribution::OnReconcileComplete(ledger::Result result,
+                                          const std::string& viewing_id,
+                                          const std::string& probi) {
+  // Start the timer again if it wasn't a direct donation
+  auto reconcile = ledger_->GetReconcileById(viewing_id);
+  if (reconcile.category_ == ledger::PUBLISHER_CATEGORY::AUTO_CONTRIBUTE) {
+    ledger_->ResetReconcileStamp();
+    ledger_->SetReconcileTimer();
+  }
+
+  // Trigger auto contribute after recurring donation
+  if (reconcile.category_ == ledger::PUBLISHER_CATEGORY::RECURRING_DONATION) {
+    StartAutoContribute();
+  }
+
+  ledger_->OnReconcileComplete(result, viewing_id, probi);
+
+  if (result != ledger::Result::LEDGER_OK) {
+    // TODO (nejczdovc) error handling
+    // TODO(nejczdovc) don't remove when we have retries
+    ledger_->RemoveReconcileById(viewing_id);
+    return;
+  }
+
+  unsigned int ballotsCount = GetBallotsCount(viewing_id);
+  GetReconcileWinners(ballotsCount, viewing_id);
 }
 
 unsigned int BatContribution::GetBallotsCount(const std::string& viewingId) {
@@ -565,6 +602,174 @@ unsigned int BatContribution::GetBallotsCount(const std::string& viewingId) {
   }
 
   return count;
+}
+
+void BatContribution::GetReconcileWinners(const unsigned int& ballots,
+                                              const std::string& viewing_id) {
+  const auto reconcile = ledger_->GetReconcileById(viewing_id);
+
+  switch (reconcile.category_) {
+    case ledger::PUBLISHER_CATEGORY::AUTO_CONTRIBUTE:
+      GetContributeWinners(ballots, viewing_id, reconcile.list_);
+      break;
+
+    case ledger::PUBLISHER_CATEGORY::RECURRING_DONATION:
+      GetDonationWinners(ballots, viewing_id, reconcile.list_);
+      break;
+
+    case ledger::PUBLISHER_CATEGORY::DIRECT_DONATION:
+      // Direct one-time contribution
+      braveledger_bat_helper::WINNERS_ST winner;
+      winner.votes_ = ballots;
+      winner.publisher_data_.id_ = reconcile.directions_.front().publisher_key_;
+      winner.publisher_data_.duration_ = 0;
+      winner.publisher_data_.score_ = 0;
+      winner.publisher_data_.visits_ = 0;
+      winner.publisher_data_.percent_ = 0;
+      winner.publisher_data_.weight_ = 0;
+      VotePublishers(braveledger_bat_helper::Winners { winner },
+                              viewing_id);
+      break;
+
+  }
+}
+
+void BatContribution::GetContributeWinners(
+    const unsigned int& ballots,
+    const std::string& viewing_id,
+    const braveledger_bat_helper::PublisherList& list) {
+  ledger::PublisherInfoList newList;
+  ledger_->NormalizeContributeWinners(&newList, false, list, 0);
+  std::sort(newList.begin(), newList.end());
+
+  unsigned int totalVotes = 0;
+  std::vector<unsigned int> votes;
+  braveledger_bat_helper::Winners res;
+  // TODO there is underscore.shuffle
+  for (auto &item : newList) {
+    if (item.percent <= 0) {
+      continue;
+    }
+
+    braveledger_bat_helper::WINNERS_ST winner;
+    winner.votes_ = (unsigned int)std::lround(
+        (double) item.percent * (double)ballots / 100.0);
+
+    totalVotes += winner.votes_;
+    winner.publisher_data_.id_ = item.id;
+    winner.publisher_data_.duration_ = item.duration;
+    winner.publisher_data_.score_ = item.score;
+    winner.publisher_data_.visits_ = item.visits;
+    winner.publisher_data_.percent_ = item.percent;
+    winner.publisher_data_.weight_ = item.weight;
+    res.push_back(winner);
+  }
+  if (res.size()) {
+    while (totalVotes > ballots) {
+      braveledger_bat_helper::Winners::iterator max =
+          std::max_element(res.begin(), res.end(), winners_votes_compare);
+      (max->votes_)--;
+      totalVotes--;
+    }
+  }
+
+  VotePublishers(res, viewing_id);
+}
+
+void BatContribution::GetDonationWinners(
+    const unsigned int& ballots,
+    const std::string& viewing_id,
+    const braveledger_bat_helper::PublisherList& list) {
+  const auto reconcile = ledger_->GetReconcileById(viewing_id);
+  unsigned int totalVotes = 0;
+  std::vector<unsigned int> votes;
+  braveledger_bat_helper::Winners res;
+
+  for (const auto &item : list) {
+    if (item.weight_ <= 0) {
+      continue;
+    }
+
+    braveledger_bat_helper::WINNERS_ST winner;
+    double percent = item.weight_ / reconcile.fee_;
+    winner.votes_ = (unsigned int)std::lround(percent * (double)ballots);
+    totalVotes += winner.votes_;
+    winner.publisher_data_.id_ = item.id_;
+    winner.publisher_data_.duration_ = 0;
+    winner.publisher_data_.score_ = 0;
+    winner.publisher_data_.visits_ = 0;
+    winner.publisher_data_.percent_ = 0;
+    winner.publisher_data_.weight_ = 0;
+    res.push_back(winner);
+  }
+
+  if (res.size()) {
+    while (totalVotes > ballots) {
+      braveledger_bat_helper::Winners::iterator max =
+          std::max_element(res.begin(), res.end(), winners_votes_compare);
+      (max->votes_)--;
+      totalVotes--;
+    }
+  }
+
+  VotePublishers(res, viewing_id);
+}
+
+void BatContribution::VotePublishers(
+    const braveledger_bat_helper::Winners& winners,
+    const std::string& viewing_id) {
+  std::vector<std::string> publishers;
+  for (size_t i = 0; i < winners.size(); i++) {
+    for (size_t j = 0; j < winners[i].votes_; j++) {
+      publishers.push_back(winners[i].publisher_data_.id_);
+    }
+  }
+
+  for (size_t i = 0; i < publishers.size(); i++) {
+    VotePublisher(publishers[i], viewing_id);
+  }
+
+  // TODO NOW
+  // bat_client_->prepareBallots();
+}
+
+void BatContribution::VotePublisher(const std::string& publisher,
+                                    const std::string& viewingId) {
+  DCHECK(!publisher.empty());
+  if (publisher.empty()) {
+    return;
+  }
+
+  braveledger_bat_helper::BALLOT_ST ballot;
+  int i = 0;
+
+  braveledger_bat_helper::Transactions transactions =
+      ledger_->GetTransactions();
+  for (i = transactions.size() - 1; i >=0; i--) {
+    if (transactions[i].votes_ >= transactions[i].surveyorIds_.size()) {
+      continue;
+    }
+
+    if (transactions[i].viewingId_ == viewingId || viewingId.empty()) {
+      break;
+    }
+  }
+
+  if (i < 0) {
+    return;
+  }
+
+  ballot.viewingId_ = transactions[i].viewingId_;
+  ballot.surveyorId_ = transactions[i].surveyorIds_[transactions[i].votes_];
+  ballot.publisher_ = publisher;
+  ballot.offset_ = transactions[i].votes_;
+  transactions[i].votes_++;
+
+  braveledger_bat_helper::Ballots ballots = ledger_->GetBallots();
+  ballots.push_back(ballot);
+  // TODO Stopped here
+  ledger_->SetTransactions(transactions);
+  ledger_->SetBallots(ballots);
 }
 
 void BatContribution::OnReconcileCompleteSuccess(

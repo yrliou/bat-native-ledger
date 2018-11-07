@@ -173,9 +173,7 @@ class LedgerImpl : public ledger::Ledger,
 
   braveledger_bat_helper::CURRENT_RECONCILE GetReconcileById(const std::string& viewingId);
   void RemoveReconcileById(const std::string& viewingId);
-  void Reconcile() override;
-  void VotePublishers(const std::vector<braveledger_bat_helper::WINNERS_ST>& winners,
-    const std::string& viewing_id);
+  void SetReconcileTimer() override;
   void PrepareVoteBatchTimer();
   void VoteBatchTimer();
   void FetchFavIcon(const std::string& url,
@@ -268,6 +266,12 @@ class LedgerImpl : public ledger::Ledger,
                             const uint32_t date,
                             const std::string& publisher_key,
                             const ledger::PUBLISHER_CATEGORY category);
+
+  void NormalizeContributeWinners(
+      ledger::PublisherInfoList* newList,
+      bool saveData,
+      const braveledger_bat_helper::PublisherList& list,
+      uint32_t /* next_record */);
 
  private:
   void MakePayment(const ledger::PaymentData& payment_data) override;

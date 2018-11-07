@@ -80,8 +80,28 @@ class BatContribution {
       const std::string& response,
       const std::map<std::string, std::string>& headers);
 
+  void OnReconcileComplete(ledger::Result result,
+                           const std::string& viewing_id,
+                           const std::string& probi = "0");
 
   unsigned int GetBallotsCount(const std::string& viewingId);
+
+  void GetReconcileWinners(const unsigned int& ballots,
+                           const std::string& viewing_id);
+
+  void GetContributeWinners(const unsigned int& ballots,
+                            const std::string& viewing_id,
+                            const braveledger_bat_helper::PublisherList& list);
+
+  void GetDonationWinners(const unsigned int& ballots,
+                          const std::string& viewing_id,
+                          const braveledger_bat_helper::PublisherList& list);
+
+  void VotePublishers(const braveledger_bat_helper::Winners& winners,
+                      const std::string& viewing_id);
+
+  void VotePublisher(const std::string& publisher,
+                     const std::string& viewingId);
 
   // Does final stage in contribution
   // Sets reports and contribution info

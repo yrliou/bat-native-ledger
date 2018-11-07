@@ -34,7 +34,6 @@ class BatClient {
   braveledger_bat_helper::CURRENT_RECONCILE GetReconcileById(const std::string& viewingId);
   bool SetReconcile(const braveledger_bat_helper::CURRENT_RECONCILE& reconcile);
   unsigned int getBallotsCount(const std::string& viewingId);
-  void votePublishers(const std::vector<std::string>& publishers, const std::string& viewingId);
   void prepareBallots();
   std::string getWalletPassphrase() const;
   void walletPropertiesCallback(bool success, const std::string& response,

@@ -222,45 +222,6 @@ void BatClient::getWalletProperties() {
    ledger_->OnWalletProperties(ledger::Result::LEDGER_OK, properties);
 }
 
-void BatClient::votePublishers(const std::vector<std::string>& publishers, const std::string& viewingId) {
-  for (size_t i = 0; i < publishers.size(); i++) {
-    vote(publishers[i], viewingId);
-  }
-}
-
-void BatClient::vote(const std::string& publisher, const std::string& viewingId) {
-  DCHECK(!publisher.empty());
-  if (publisher.empty()) {
-    return;
-  }
-  braveledger_bat_helper::BALLOT_ST ballot;
-  int i = 0;
-
-  braveledger_bat_helper::Transactions transactions =
-      ledger_->GetTransactions();
-  for (i = transactions.size() - 1; i >=0; i--) {
-    if (transactions[i].votes_ >= transactions[i].surveyorIds_.size()) {
-      continue;
-    }
-    if (transactions[i].viewingId_ == viewingId || viewingId.empty()) {
-      break;
-    }
-  }
-  if (i < 0) {
-    return;
-  }
-  ballot.viewingId_ = transactions[i].viewingId_;
-  ballot.surveyorId_ = transactions[i].surveyorIds_[transactions[i].votes_];
-  ballot.publisher_ = publisher;
-  ballot.offset_ = transactions[i].votes_;
-  transactions[i].votes_++;
-
-  braveledger_bat_helper::Ballots ballots = ledger_->GetBallots();
-  ballots.push_back(ballot);
-  ledger_->SetTransactions(transactions);
-  ledger_->SetBallots(ballots);
-}
-
 void BatClient::prepareBallots() {
   braveledger_bat_helper::Transactions transactions =
       ledger_->GetTransactions();

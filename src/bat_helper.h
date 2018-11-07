@@ -238,6 +238,8 @@ namespace braveledger_bat_helper {
     unsigned int votes_ = 0;
   };
 
+  typedef std::vector<braveledger_bat_helper::WINNERS_ST> Winners;
+
   struct SURVEYOR_INFO_ST {
     SURVEYOR_INFO_ST();
     ~SURVEYOR_INFO_ST();
