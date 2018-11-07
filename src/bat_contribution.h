@@ -34,10 +34,6 @@ class BatContribution {
                               const ledger::PublisherInfoList& list,
                               uint32_t next_record);
 
-  // Fetches recurring donations that will be then used for the contribution.
-  // This is called from global timer in impl.
-  void OnTimerReconcile();
-
   // Triggers contribution process for auto contribute table
   void StartAutoContribute();
 
@@ -103,6 +99,11 @@ class BatContribution {
                           const std::string& viewing_id,
                           const braveledger_bat_helper::PublisherList& list);
 
+
+  void OnTimer(uint32_t timer_id);
+
+  void SetReconcileTimer();
+
   // Does final stage in contribution
   // Sets reports and contribution info
   void OnReconcileCompleteSuccess(const std::string& viewing_id,
@@ -116,6 +117,10 @@ class BatContribution {
   std::string GetAnonizeProof(const std::string& registrar_VK,
                               const std::string& id,
                               std::string& pre_flight);
+
+  // Fetches recurring donations that will be then used for the contribution.
+  // This is called from global timer in impl.
+  void OnTimerReconcile();
 
   void VotePublishers(const braveledger_bat_helper::Winners& winners,
                       const std::string& viewing_id);
@@ -134,6 +139,8 @@ class BatContribution {
       const std::string& response,
       const std::map<std::string, std::string>& headers);
 
+  void PrepareVoteBatch();
+
   void ProofBatch(
       const braveledger_bat_helper::BathProofs& batchProof,
       ledger::LedgerTaskRunner::CallerThreadCallback callback);
@@ -142,9 +149,21 @@ class BatContribution {
       const braveledger_bat_helper::BathProofs& batchProof,
       const std::vector<std::string>& proofs);
 
-  bat_ledger::LedgerImpl* ledger_;  // NOT OWNED
+  void VoteBatch();
 
+  void VoteBatchCallback(
+      const std::string& publisher,
+      bool result,
+      const std::string& response,
+      const std::map<std::string, std::string>& headers);
+
+  void SetTimer(uint32_t timer_id, uint64_t start_timer_in = 0);
+
+  bat_ledger::LedgerImpl* ledger_;  // NOT OWNED
   bat_ledger::URLRequestHandler handler_;
+  uint32_t last_reconcile_timer_id_;
+  uint32_t last_prepare_vote_batch_timer_id_;
+  uint32_t last_vote_batch_timer_id_;
 };
 
 }  // namespace braveledger_bat_contribution

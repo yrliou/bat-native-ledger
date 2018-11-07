@@ -173,9 +173,6 @@ class LedgerImpl : public ledger::Ledger,
 
   braveledger_bat_helper::CURRENT_RECONCILE GetReconcileById(const std::string& viewingId);
   void RemoveReconcileById(const std::string& viewingId);
-  void SetReconcileTimer() override;
-  void PrepareVoteBatchTimer();
-  void VoteBatchTimer();
   void FetchFavIcon(const std::string& url,
                     const std::string& favicon_key,
                     ledger::FetchIconCallback callback);
@@ -273,6 +270,8 @@ class LedgerImpl : public ledger::Ledger,
       const braveledger_bat_helper::PublisherList& list,
       uint32_t /* next_record */);
 
+  void SetTimer(uint64_t time_offset, uint32_t& timer_id) const;
+
  private:
   void MakePayment(const ledger::PaymentData& payment_data) override;
   void AddRecurringPayment(const std::string& publisher_id, const double& value) override;
@@ -341,9 +340,6 @@ class LedgerImpl : public ledger::Ledger,
   uint64_t last_tab_active_time_;
   uint32_t last_shown_tab_id_;
   uint32_t last_pub_load_timer_id_;
-  uint32_t last_reconcile_timer_id_;
-  uint32_t last_prepare_vote_batch_timer_id_;
-  uint32_t last_vote_batch_timer_id_;
   uint32_t last_grant_check_timer_id_;
  };
 }  // namespace bat_ledger

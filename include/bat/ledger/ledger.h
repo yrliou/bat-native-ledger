@@ -84,7 +84,6 @@ class LEDGER_EXPORT Ledger {
   virtual void Initialize() = 0;
   // returns false if wallet initialization is already in progress
   virtual bool CreateWallet() = 0;
-  virtual void SetReconcileTimer() = 0;
 
   virtual void MakePayment(const PaymentData& payment_data) = 0;
   virtual void AddRecurringPayment(const std::string& publisher_id, const double& value) = 0;

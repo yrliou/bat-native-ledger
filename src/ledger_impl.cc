@@ -42,9 +42,6 @@ LedgerImpl::LedgerImpl(ledger::LedgerClient* client) :
     last_tab_active_time_(0),
     last_shown_tab_id_(-1),
     last_pub_load_timer_id_(0u),
-    last_reconcile_timer_id_(0u),
-    last_prepare_vote_batch_timer_id_(0u),
-    last_vote_batch_timer_id_(0u),
     last_grant_check_timer_id_(0u) {
 }
 
@@ -254,7 +251,7 @@ void LedgerImpl::OnWalletInitialized(ledger::Result result) {
   if (result == ledger::Result::LEDGER_OK || result == ledger::Result::WALLET_CREATED) {
     initialized_ = true;
     LoadPublisherList(this);
-    SetReconcileTimer();
+    bat_contribution_->SetReconcileTimer();
     RefreshGrant(false);
   }
 }
@@ -436,21 +433,6 @@ uint64_t LedgerImpl::GetReconcileStamp() const {
   return bat_state_->GetReconcileStamp();
 }
 
-void LedgerImpl::SetReconcileTimer() {
-  if (last_reconcile_timer_id_ != 0) {
-    // Timer in progress
-    return;
-  }
-
-  uint64_t now = std::time(nullptr);
-  uint64_t nextReconcileTimestamp = GetReconcileStamp();
-
-  uint64_t time_to_next_reconcile = (nextReconcileTimestamp == 0 || nextReconcileTimestamp < now) ?
-    0 : nextReconcileTimestamp - now;
-
-  ledger_client_->SetTimer(time_to_next_reconcile, last_reconcile_timer_id_);
-}
-
 void LedgerImpl::OnReconcileComplete(ledger::Result result,
                                     const std::string& viewing_id,
                                     const std::string& probi) {
@@ -461,22 +443,6 @@ void LedgerImpl::OnReconcileComplete(ledger::Result result,
       viewing_id,
       (ledger::PUBLISHER_CATEGORY)reconcile.category_,
       probi);
-}
-
-void LedgerImpl::PrepareVoteBatchTimer() {
-  uint64_t start_timer_in = braveledger_bat_helper::getRandomValue(10, 60);
-
-  Log(__func__, ledger::LogLevel::LOG_ERROR, {"Starts in ", std::to_string(start_timer_in)});
-
-  ledger_client_->SetTimer(start_timer_in, last_prepare_vote_batch_timer_id_);
-}
-
-void LedgerImpl::VoteBatchTimer() {
-  uint64_t start_timer_in = braveledger_bat_helper::getRandomValue(10, 60);
-
-  Log(__func__, ledger::LogLevel::LOG_ERROR, {"Starts in ", std::to_string(start_timer_in)});
-
-  ledger_client_->SetTimer(start_timer_in, last_vote_batch_timer_id_);
 }
 
 void LedgerImpl::OnWalletProperties(ledger::Result result,
@@ -630,22 +596,12 @@ void LedgerImpl::OnTimer(uint32_t timer_id) {
     auto url_loader = LoadURL(url, std::vector<std::string>(), "", "", ledger::URL_METHOD::GET, &handler_);
     handler_.AddRequestHandler(std::move(url_loader),
       std::bind(&LedgerImpl::LoadPublishersListCallback,this,_1,_2,_3));
-  } else if (timer_id == last_reconcile_timer_id_) {
-    last_reconcile_timer_id_ = 0;
-
-    // Recurring direct donation
-   bat_contribution_->OnTimerReconcile();
-
-  } else if (timer_id == last_prepare_vote_batch_timer_id_) {
-    last_prepare_vote_batch_timer_id_ = 0;
-    bat_client_->prepareVoteBatch();
-  } else if (timer_id == last_vote_batch_timer_id_) {
-    last_vote_batch_timer_id_ = 0;
-    bat_client_->voteBatch();
   } else if (timer_id == last_grant_check_timer_id_) {
     last_grant_check_timer_id_ = 0;
     FetchGrant(std::string(), std::string());
   }
+
+  bat_contribution_->OnTimer(timer_id);
 }
 
 void LedgerImpl::GetRecurringDonations(ledger::PublisherInfoListCallback callback) {
@@ -655,8 +611,7 @@ void LedgerImpl::GetRecurringDonations(ledger::PublisherInfoListCallback callbac
 void LedgerImpl::LoadPublishersListCallback(bool result, const std::string& response, const std::map<std::string, std::string>& headers) {
   if (result && !response.empty()) {
     bat_publishers_->RefreshPublishersList(response);
-  }
-  else {
+  } else {
     Log(__func__, ledger::LogLevel::LOG_ERROR, {"Can't fetch publisher list."});
     //error: retry downloading again
     RefreshPublishersList(true);
@@ -696,7 +651,7 @@ void LedgerImpl::RefreshPublishersList(bool retryAfterError) {
   }
 
   //start timer
-  ledger_client_->SetTimer(start_timer_in, last_pub_load_timer_id_);
+  SetTimer(start_timer_in, last_pub_load_timer_id_);
 }
 
 void LedgerImpl::RefreshGrant(bool retryAfterError) {
@@ -723,7 +678,7 @@ void LedgerImpl::RefreshGrant(bool retryAfterError) {
       start_timer_in = 0ull;
     }
   }
-  ledger_client_->SetTimer(start_timer_in, last_grant_check_timer_id_);
+  SetTimer(start_timer_in, last_grant_check_timer_id_);
 }
 
 uint64_t LedgerImpl::retryRequestSetup(uint64_t min_time, uint64_t max_time) {
@@ -1024,6 +979,10 @@ void LedgerImpl::NormalizeContributeWinners(
     const braveledger_bat_helper::PublisherList& list,
     uint32_t record) {
   bat_publishers_->NormalizeContributeWinners(newList, saveData, list, record);
+}
+
+void LedgerImpl::SetTimer(uint64_t time_offset, uint32_t& timer_id) const {
+  ledger_client_->SetTimer(time_offset, timer_id);
 }
 
 }  // namespace bat_ledger

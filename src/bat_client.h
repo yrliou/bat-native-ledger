@@ -39,8 +39,6 @@ class BatClient {
   void setGrant(const std::string& captchaResponse, const std::string& promotionId);
   void getGrantCaptcha();
   void getWalletProperties();
-  void prepareVoteBatch();
-  void voteBatch();
 
   void continueRecover(int result, size_t *written, std::vector<uint8_t>& newSeed);
 
@@ -59,9 +57,6 @@ class BatClient {
       const std::map<std::string, std::string>& headers);
   void recoverWalletCallback(bool result, const std::string& response,
       const std::map<std::string, std::string>& headers, const std::string& paymentId);
-  void voteBatchCallback(const std::string& publisher, bool result, const std::string& response,
-      const std::map<std::string, std::string>& headers);
-  void vote(const std::string& publisher, const std::string& viewingId);
   std::string getAnonizeProof(const std::string& registrarVK, const std::string& id, std::string& preFlight);
 
   bat_ledger::LedgerImpl* ledger_;  // NOT OWNED

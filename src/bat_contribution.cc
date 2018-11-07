@@ -5,6 +5,7 @@
 #include <vector>
 #include <map>
 #include <cmath>
+#include <ctime>
 
 #include "anon/anon.h"
 #include "bat_contribution.h"
@@ -20,7 +21,10 @@ static bool winners_votes_compare(
 }
 
 BatContribution::BatContribution(bat_ledger::LedgerImpl* ledger) :
-    ledger_(ledger) {
+    ledger_(ledger),
+    last_reconcile_timer_id_(0u),
+    last_prepare_vote_batch_timer_id_(0u),
+    last_vote_batch_timer_id_(0u) {
   initAnonize();
 }
 
@@ -578,7 +582,7 @@ void BatContribution::OnReconcileComplete(ledger::Result result,
   auto reconcile = ledger_->GetReconcileById(viewing_id);
   if (reconcile.category_ == ledger::PUBLISHER_CATEGORY::AUTO_CONTRIBUTE) {
     ledger_->ResetReconcileStamp();
-    ledger_->SetReconcileTimer();
+    SetReconcileTimer();
   }
 
   // Trigger auto contribute after recurring donation
@@ -946,8 +950,191 @@ void BatContribution::ProofBatchCallback(
   }
 
   ledger_->SetBallots(ballots);
-  // TODO stoped here
-  ledger_->PrepareVoteBatchTimer();
+  SetTimer(last_prepare_vote_batch_timer_id_);
+}
+
+void BatContribution::PrepareVoteBatch() {
+  braveledger_bat_helper::Transactions transactions =
+      ledger_->GetTransactions();
+  braveledger_bat_helper::Ballots ballots = ledger_->GetBallots();
+    braveledger_bat_helper::BatchVotes batch = ledger_->GetBatch();
+
+  for (int i = ballots.size() - 1; i >= 0; i--) {
+    if (ballots[i].prepareBallot_.empty() || ballots[i].proofBallot_.empty()) {
+      // TODO(nejczdovc) error handling
+      continue;
+    }
+
+    bool transactionExist = false;
+    for (size_t k = 0; k < transactions.size(); k++) {
+      if (transactions[k].viewingId_ == ballots[i].viewingId_) {
+        bool existBallot = false;
+        for (size_t j = 0; j < transactions[k].ballots_.size(); j++) {
+          if (transactions[k].ballots_[j].publisher_ == ballots[i].publisher_) {
+            transactions[k].ballots_[j].offset_++;
+            existBallot = true;
+            break;
+          }
+        }
+        if (!existBallot) {
+          braveledger_bat_helper::TRANSACTION_BALLOT_ST transactionBallot;
+          transactionBallot.publisher_ = ballots[i].publisher_;
+          transactionBallot.offset_++;
+          transactions[k].ballots_.push_back(transactionBallot);
+        }
+        transactionExist = true;
+        break;
+      }
+    }
+
+    if (!transactionExist) {
+      continue;
+    }
+
+    bool existBatch = false;
+    braveledger_bat_helper::BATCH_VOTES_INFO_ST batchVotesInfoSt;
+    batchVotesInfoSt.surveyorId_ = ballots[i].surveyorId_;
+    batchVotesInfoSt.proof_ = ballots[i].proofBallot_;
+
+    for (size_t k = 0; k < batch.size(); k++) {
+      if (batch[k].publisher_ == ballots[i].publisher_) {
+        existBatch = true;
+        batch[k].batchVotesInfo_.push_back(batchVotesInfoSt);
+      }
+    }
+
+    if (!existBatch) {
+      braveledger_bat_helper::BATCH_VOTES_ST batchVotesSt;
+      batchVotesSt.publisher_ = ballots[i].publisher_;
+      batchVotesSt.batchVotesInfo_.push_back(batchVotesInfoSt);
+      batch.push_back(batchVotesSt);
+    }
+    ballots.erase(ballots.begin() + i);
+  }
+
+  ledger_->SetTransactions(transactions);
+  ledger_->SetBallots(ballots);
+  ledger_->SetBatch(batch);
+  SetTimer(last_vote_batch_timer_id_);
+}
+
+void BatContribution::VoteBatch() {
+  braveledger_bat_helper::BatchVotes batch = ledger_->GetBatch();
+  if (batch.size() == 0) {
+    return;
+  }
+
+  braveledger_bat_helper::BATCH_VOTES_ST batchVotes = batch[0];
+  std::vector<braveledger_bat_helper::BATCH_VOTES_INFO_ST> voteBatch;
+
+  if (batchVotes.batchVotesInfo_.size() > VOTE_BATCH_SIZE) {
+    voteBatch.assign(batchVotes.batchVotesInfo_.begin(),
+                     batchVotes.batchVotesInfo_.begin() + VOTE_BATCH_SIZE);
+  } else {
+    voteBatch = batchVotes.batchVotesInfo_;
+  }
+
+  std::string payload = braveledger_bat_helper::stringifyBatch(voteBatch);
+
+  std::string url = braveledger_bat_helper::buildURL(
+      (std::string)SURVEYOR_BATCH_VOTING ,
+      PREFIX_V2);
+
+  auto request_id = ledger_->LoadURL(url,
+                                     std::vector<std::string>(),
+                                     payload,
+                                     "application/json; charset=utf-8",
+                                     ledger::URL_METHOD::POST,
+                                     &handler_);
+  handler_.AddRequestHandler(std::move(request_id),
+                             std::bind(&BatContribution::VoteBatchCallback,
+                                       this,
+                                       batchVotes.publisher_,
+                                       std::placeholders::_1,
+                                       std::placeholders::_2,
+                                       std::placeholders::_3));
+}
+
+void BatContribution::VoteBatchCallback(
+    const std::string& publisher,
+    bool result,
+    const std::string& response,
+    const std::map<std::string, std::string>& headers) {
+  ledger_->LogResponse(__func__, result, response, headers);
+
+  std::vector<std::string> surveyors;
+  braveledger_bat_helper::getJSONBatchSurveyors(response, surveyors);
+  braveledger_bat_helper::BatchVotes batch = ledger_->GetBatch();
+
+  for (size_t i = 0; i < batch.size(); i++) {
+    if (batch[i].publisher_ == publisher) {
+      size_t sizeToCheck = VOTE_BATCH_SIZE;
+      if (batch[i].batchVotesInfo_.size() < VOTE_BATCH_SIZE) {
+        sizeToCheck = batch[i].batchVotesInfo_.size();
+      }
+
+      for (int j = sizeToCheck - 1; j >= 0; j--) {
+        for (size_t k = 0; k < surveyors.size(); k++) {
+          std::string surveyorId;
+          braveledger_bat_helper::getJSONValue("surveyorId",
+                                               surveyors[k],
+                                               surveyorId);
+          if (surveyorId == batch[i].batchVotesInfo_[j].surveyorId_) {
+            batch[i].batchVotesInfo_.erase(
+                batch[i].batchVotesInfo_.begin() + j);
+            break;
+          }
+        }
+      }
+
+      if (0 == batch[i].batchVotesInfo_.size()) {
+        batch.erase(batch.begin() + i);
+      }
+      break;
+    }
+  }
+  ledger_->SetBatch(batch);
+  SetTimer(last_vote_batch_timer_id_);
+}
+
+void BatContribution::OnTimer(uint32_t timer_id) {
+  if (timer_id == last_reconcile_timer_id_) {
+    last_reconcile_timer_id_ = 0;
+    OnTimerReconcile();
+  } else if (timer_id == last_vote_batch_timer_id_) {
+    last_vote_batch_timer_id_ = 0;
+    VoteBatch();
+  } else if (timer_id == last_prepare_vote_batch_timer_id_) {
+    last_prepare_vote_batch_timer_id_ = 0;
+    PrepareVoteBatch();
+  }
+}
+
+void BatContribution::SetReconcileTimer() {
+  if (last_reconcile_timer_id_ != 0) {
+    return;
+  }
+
+  uint64_t now = std::time(nullptr);
+  uint64_t nextReconcileTimestamp = ledger_->GetReconcileStamp();
+
+  uint64_t time_to_next_reconcile =
+      (nextReconcileTimestamp == 0 || nextReconcileTimestamp < now) ?
+        0 : nextReconcileTimestamp - now;
+
+  SetTimer(last_reconcile_timer_id_, time_to_next_reconcile);
+}
+
+void BatContribution::SetTimer(uint32_t timer_id, uint64_t start_timer_in) {
+  if (start_timer_in == 0) {
+    start_timer_in = braveledger_bat_helper::getRandomValue(10, 60);
+  }
+
+  ledger_->Log(__func__,
+               ledger::LogLevel::LOG_INFO,
+               {"Starts in ", std::to_string(start_timer_in)});
+
+  ledger_->SetTimer(start_timer_in, timer_id);
 }
 
 void BatContribution::OnReconcileCompleteSuccess(
