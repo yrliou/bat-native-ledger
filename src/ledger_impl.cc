@@ -505,7 +505,8 @@ void LedgerImpl::VotePublishers(const std::vector<braveledger_bat_helper::WINNER
 void LedgerImpl::PrepareVoteBatchTimer() {
   uint64_t start_timer_in = braveledger_bat_helper::getRandomValue(10, 60);
 
-  Log(__func__, ledger::LogLevel::LOG_ERROR, {"Starts in ", std::to_string(start_timer_in)});
+  LOG(ledger_client_, ledger::LogLevel::LOG_ERROR) <<
+    "Starts in " << start_timer_in;
 
   ledger_client_->SetTimer(start_timer_in, last_prepare_vote_batch_timer_id_);
 }
@@ -513,7 +514,8 @@ void LedgerImpl::PrepareVoteBatchTimer() {
 void LedgerImpl::VoteBatchTimer() {
   uint64_t start_timer_in = braveledger_bat_helper::getRandomValue(10, 60);
 
-  Log(__func__, ledger::LogLevel::LOG_ERROR, {"Starts in ", std::to_string(start_timer_in)});
+  LOG(ledger_client_, ledger::LogLevel::LOG_ERROR) <<
+    "Starts in " << start_timer_in;
 
   ledger_client_->SetTimer(start_timer_in, last_vote_batch_timer_id_);
 }
@@ -710,7 +712,8 @@ void LedgerImpl::LoadPublishersListCallback(bool result, const std::string& resp
     bat_publishers_->RefreshPublishersList(response);
   }
   else {
-    Log(__func__, ledger::LogLevel::LOG_ERROR, {"Can't fetch publisher list."});
+    LOG(ledger_client_, ledger::LogLevel::LOG_ERROR) <<
+      "Can't fetch publisher list.";
     //error: retry downloading again
     RefreshPublishersList(true);
   }
@@ -916,32 +919,34 @@ ledger::PublisherInfoFilter LedgerImpl::CreatePublisherFilter(const std::string&
                                         currentReconcileStamp);
 }
 
-void LedgerImpl::Log(const std::string& func_name, const ledger::LogLevel log_level, std::vector<std::string> data) {
-  const char* delimiter = " ";
-  std::stringstream imploded;
-  std::copy(data.begin(), data.end(),
-             std::ostream_iterator<std::string>(imploded, delimiter));
-  ledger_client_->Log(log_level, "[ LOG - " + func_name + " ]");
-  ledger_client_->Log(log_level, "> time: " + std::to_string(time(0)));
-  ledger_client_->Log(log_level, imploded.str());
-  ledger_client_->Log(log_level, "[ END LOG ]");
+std::ostream& LedgerImpl::Log(
+    const char* file,
+    int line,
+    const ledger::LogLevel log_level) const {
+  // bat-native-ledger architecture does not expose the client however the
+  // ledger impl is exposed so for now we will proxy logging via from the
+  // ledger impl to the client
+  return ledger_client->Log(file, line, log_level);
 }
 
 void LedgerImpl::LogResponse(const std::string& func_name,
                              bool result,
                              const std::string& response,
                              const std::map<std::string, std::string>& headers) {
-  std::string stat = result ? "success" : "failure";
-  ledger_client_->Log(ledger::LogLevel::LOG_RESPONSE, "[ RESPONSE - " + func_name + " ]");
-  ledger_client_->Log(ledger::LogLevel::LOG_RESPONSE, "> time: " + std::to_string(time(0)));
-  ledger_client_->Log(ledger::LogLevel::LOG_RESPONSE, "> result: " + stat);
-  ledger_client_->Log(ledger::LogLevel::LOG_RESPONSE, "> response: " + response);
+  std::string stat = result ? "Success" : "Failure";
 
-  for(std::pair<std::string, std::string> const& value: headers) {
-    ledger_client_->Log(ledger::LogLevel::LOG_RESPONSE, "> header: " + value.first + " | " + value.second);
+  LOG(ledger_client_, ledger::LogLevel::LOG_RESPONSE) <<
+    "[ RESPONSE - " << func_name << " ]" << std::end <<
+    "> time: " << std::time(nullptr) << std::endl <<
+    "> result: " << stat << std::endl <<
+    "> response: " << response << std::endl;
+
+  for (std::pair<std::string, std::string> const& value: headers) {
+    LOG(ledger_client_, ledger::LogLevel::LOG_RESPONSE) <<
+      "> headers " << value.first << " | " << value.second std::endl;
   }
 
-  ledger_client_->Log(ledger::LogLevel::LOG_RESPONSE, "[ END RESPONSE ]");
+  LOG(ledger_client_, ledger::LogLevel::LOG_RESPONSE) << "[ END RESPONSE ]";
 }
 
 void LedgerImpl::ResetReconcileStamp() {

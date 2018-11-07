@@ -214,7 +214,7 @@ void BatClient::getWalletProperties() {
 
    bool ok = braveledger_bat_helper::loadFromJson(properties, response);
    if (!ok) {
-     ledger_->Log(__func__, ledger::LogLevel::LOG_ERROR, {"Failed to load wallet properties state."});
+     LOG(ledger_, ledger::LogLevel::LOG_ERROR) << "Failed to load wallet properties state";
      ledger_->OnWalletProperties(ledger::Result::LEDGER_ERROR, properties);
      return;
    }
@@ -247,7 +247,7 @@ void BatClient::reconcile(const std::string& viewingId,
     const std::vector<braveledger_bat_helper::PUBLISHER_ST>& list,
     const std::vector<braveledger_bat_helper::RECONCILE_DIRECTION>& directions) {
   if (ledger_->ReconcileExists(viewingId)) {
-    ledger_->Log(__func__, ledger::LogLevel::LOG_ERROR, {"unable to reconcile with the same viewing id"});
+    LOG(ledger_, ledger::LogLevel::LOG_ERROR) << "Unable to reconcile with the same viewing id";
     // TODO add error callback
     return;
   }
@@ -263,11 +263,11 @@ void BatClient::reconcile(const std::string& viewingId,
 
     if (list.size() == 0 || ac_amount > balance) {
       if (list.size() == 0) {
-        ledger_->Log(__func__, ledger::LogLevel::LOG_INFO, {"AC table is empty"});
+        LOG(ledger_, ledger::LogLevel::LOG_INFO) << "Auto contribution table is empty";
       }
 
       if (ac_amount > balance) {
-        ledger_->Log(__func__, ledger::LogLevel::LOG_INFO, {"You don't have enough funds for AC contribution"});
+        LOG(ledger_, ledger::LogLevel::LOG_INFO) << "You do not have enough funds for auto contribution";
       }
 
       ledger_->ResetReconcileStamp();
@@ -281,7 +281,7 @@ void BatClient::reconcile(const std::string& viewingId,
   if (category == ledger::PUBLISHER_CATEGORY::RECURRING_DONATION) {
     double ac_amount = ledger_->GetContributionAmount();
     if (list.size() == 0) {
-      ledger_->Log(__func__, ledger::LogLevel::LOG_INFO, {"recurring donation list is empty"});
+      LOG(ledger_, ledger::LogLevel::LOG_INFO) << "Recurring donation list is empty";
       ledger_->StartAutoContribute();
       // TODO add error callback
       return;
@@ -289,7 +289,7 @@ void BatClient::reconcile(const std::string& viewingId,
 
     for (const auto& publisher : list) {
       if (publisher.id_.empty()) {
-        ledger_->Log(__func__, ledger::LogLevel::LOG_ERROR, {"recurring donation is missing publisher"});
+        LOG(ledger_, ledger::LogLevel::LOG_ERROR) << "Recurring donation is missing publisher";
         ledger_->StartAutoContribute();
         // TODO add error callback
         return;
@@ -299,7 +299,7 @@ void BatClient::reconcile(const std::string& viewingId,
     }
 
     if (fee + ac_amount > balance) {
-        ledger_->Log(__func__, ledger::LogLevel::LOG_ERROR, {"You don't have enough funds to do recurring and AC contribution"});
+      LOG(ledger_, ledger::LogLevel::LOG_ERROR) << "You do not have enough funds to do recurring and auto contribution";
       // TODO add error callback
       return;
     }
@@ -310,13 +310,13 @@ void BatClient::reconcile(const std::string& viewingId,
   if (category == ledger::PUBLISHER_CATEGORY::DIRECT_DONATION) {
     for (const auto& direction : directions) {
       if (direction.publisher_key_.empty()) {
-        ledger_->Log(__func__, ledger::LogLevel::LOG_ERROR, {"reconcile direction missing publisher"});
+        LOG(ledger_, ledger::LogLevel::LOG_ERROR) << "Reconcile direction missing publisher";
         // TODO add error callback
         return;
       }
 
       if (direction.currency_ != CURRENCY) {
-        ledger_->Log(__func__, ledger::LogLevel::LOG_ERROR, {"reconcile direction currency invalid for ", direction.publisher_key_});
+        LOG(ledger_, ledger::LogLevel::LOG_ERROR) << "reconcile direction currency invalid for " << direction.publisher_key_;
         // TODO add error callback
         return;
       }
@@ -325,7 +325,7 @@ void BatClient::reconcile(const std::string& viewingId,
     }
 
     if (fee > balance) {
-      ledger_->Log(__func__, ledger::LogLevel::LOG_ERROR, {"You don't have enough funds to do a tip"});
+      LOG(ledger_, ledger::LogLevel::LOG_ERROR) << "You do not have enough funds to do a tip";
       // TODO add error callback
       return;
     }
@@ -747,7 +747,7 @@ void BatClient::proofBatch(
   for (size_t i = 0; i < batchProof.size(); i++) {
     braveledger_bat_helper::SURVEYOR_ST surveyor;
     if (!braveledger_bat_helper::loadFromJson(surveyor, batchProof[i].ballot_.prepareBallot_)) {
-      ledger_->Log(__func__, ledger::LogLevel::LOG_ERROR, {"Failed to load surveyor state: ", batchProof[i].ballot_.prepareBallot_});
+      LOG(ledger_, ledger::LogLevel::LOG_ERROR) << "Failed to load surveyor state: " << batchProof[i].ballot_.prepareBallot_;
     }
 
     std::string signatureToSend;
@@ -979,7 +979,7 @@ void BatClient::OnNicewareListLoaded(const std::string& pass_phrase,
 
 void BatClient::continueRecover(int result, size_t *written, std::vector<uint8_t>& newSeed) {
   if (0 != result || 0 == *written) {
-    ledger_->Log(__func__, ledger::LogLevel::LOG_ERROR, {"Result: ", std::to_string(result), " Size: ", std::to_string(*written)});
+    LOG(ledger_, ledger::LogLevel::LOG_ERROR) << "Result: " << result << " Size: " << *written;
     std::vector<braveledger_bat_helper::GRANT> empty;
     ledger_->OnRecoverWallet(ledger::Result::LEDGER_ERROR, 0, empty);
     return;
