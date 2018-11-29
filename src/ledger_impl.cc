@@ -48,6 +48,11 @@ LedgerImpl::LedgerImpl(ledger::LedgerClient* client) :
 LedgerImpl::~LedgerImpl() {
 }
 
+void LedgerImpl::Test() {
+  LOG(ERROR) << __PRETTY_FUNCTION__;
+  ledger_client_->Test();
+}
+
 void LedgerImpl::Initialize() {
   DCHECK(!initializing_);
   initializing_ = true;

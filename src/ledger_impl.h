@@ -54,6 +54,7 @@ class LedgerImpl : public ledger::Ledger,
   LedgerImpl& operator=(const LedgerImpl&) = delete;
 
   std::string GenerateGUID() const;
+  void Test() override;
   void Initialize() override;
   bool CreateWallet() override;
 

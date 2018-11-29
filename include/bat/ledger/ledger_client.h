@@ -149,6 +149,7 @@ class LEDGER_EXPORT LedgerClient {
       const char* file,
       int line,
       const ledger::LogLevel log_level) const = 0;
+  virtual void Test() = 0;
 };
 
 }  // namespace ledger

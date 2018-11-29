@@ -82,6 +82,7 @@ class LEDGER_EXPORT Ledger {
 
   static Ledger* CreateInstance(LedgerClient* client);
 
+  virtual void Test() = 0;
   virtual void Initialize() = 0;
   // returns false if wallet initialization is already in progress
   virtual bool CreateWallet() = 0;
